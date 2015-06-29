@@ -1,0 +1,7 @@
+{% extends "base/base.html" %}
+
+{% block page_content %}
+    <p>your account haven't confirm, please to mail confirm!</p>
+    <p>send confirm email again if you don't recv confirm mail,
+        <a href="{{ url_for('auth.resend_confirmation') }}">click here</a>!</p>
+{% endblock %}
