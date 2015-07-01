@@ -19,6 +19,8 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(64), unique=True)
     confirmed = db.Column(db.Boolean, default=False)
 
+    pending_email = db.Column(db.String(64), unique=True)
+
     def __repr__(self):
         return "<User %r>" % self.username
 
@@ -62,6 +64,23 @@ class User(UserMixin, db.Model):
             return False
         if data.get('reset') != self.id:
             return False
+        return True
+
+    def generate_change_email_token(self, expiration=3600):
+        s = Serializer(current_app.config['SECRET_KEY'], expiration)
+        return s.dumps({'change_email': self.id})
+
+    def change_email(self, token):
+        s = Serializer(current_app.config['SECRET_KEY'])
+        try:
+            data = s.loads(token)
+        except:
+            return False
+        if data.get('change_email') != self.id:
+            return False
+        self.email = self.pending_email
+        db.session.add(self)
+        db.session.commit()
         return True
 
 

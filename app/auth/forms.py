@@ -43,7 +43,7 @@ class ChangePasswordForm(Form):
 
     def validate_old_password(self, field):
         if not current_user.verify_password(field.data):
-            raise ValidationError('old password incorrect')
+            raise ValidationError('Old password incorrect')
 
 
 class ResetPasswordRequestForm(Form):
@@ -52,7 +52,7 @@ class ResetPasswordRequestForm(Form):
 
     def validate_email(self, field):
         if not User.query.filter_by(email=field.data).first():
-            raise ValidationError('email incorrect')
+            raise ValidationError('Email incorrect')
 
 
 class ResetPasswordForm(Form):
@@ -64,4 +64,17 @@ class ResetPasswordForm(Form):
 
     def validate_email(self, field):
         if not User.query.filter_by(email=field.data).first():
-            raise ValidationError('email incorrect')
+            raise ValidationError('Email incorrect')
+
+class ChangeEmail(Form):
+    verify_password = PasswordField('verify password', validators=[Required(), Length(1, 16)])
+    new_email = StringField('new email', validators=[Required(), Length(1, 64), Email()])
+    submit = SubmitField('Submit')
+
+    def validate_verify_password(self, field):
+        if not current_user.verify_password(field.data):
+            raise ValidationError('Password incorrect')
+
+    def validate_new_email(self, field):
+        if User.query.filter_by(email=field.data).first():
+            raise ValidationError('Email already in use')

@@ -5,7 +5,8 @@ from flask import render_template, redirect, url_for, flash
 from flask.ext.login import login_user, logout_user, current_user, login_required
 
 from . import auth
-from forms import LoginForm, RegisterForm, ChangePasswordForm, ResetPasswordRequestForm, ResetPasswordForm
+from forms import LoginForm, RegisterForm, ChangePasswordForm, ResetPasswordRequestForm,\
+                    ResetPasswordForm, ChangeEmail
 from ..models import User, db
 from ..email import send_email
 
@@ -127,3 +128,26 @@ def reset_password(token):
         flash('password reset successful. You can login.')
         return redirect(url_for('auth.login'))
     return render_template('auth/reset_password.html', form=form)
+
+
+@auth.route('/change_email', methods=['GET', 'POST'])
+@login_required
+def change_email_request():
+    form = ChangeEmail()
+    if form.validate_on_submit():
+        token = current_user.generate_change_email_token()
+        send_email(form.new_email.data, 'change email', 'email/change_email',
+                   token=token, user=current_user)
+        flash('an email send to your new email of change email.')
+        return redirect(url_for('main.index'))
+    return render_template('auth/change_email.html', form=form)
+
+
+@auth.route('/change_email/<token>')
+@login_required
+def change_email(token):
+    if not current_user.change_email(token):
+        flash('Invalidate change email token')
+        return redirect(url_for('main.index'))
+    flash('Email change successful')
+    return redirect(url_for('main.index'))
