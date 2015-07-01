@@ -5,7 +5,7 @@ from flask import render_template, redirect, url_for, flash
 from flask.ext.login import login_user, logout_user, current_user, login_required
 
 from . import auth
-from forms import LoginForm, RegisterForm, ChangePasswordForm
+from forms import LoginForm, RegisterForm, ChangePasswordForm, ResetPasswordRequestForm, ResetPasswordForm
 from ..models import User, db
 from ..email import send_email
 
@@ -25,6 +25,7 @@ def register():
         return redirect(url_for('.login'))
     return render_template("auth/register.html", form=form)
 
+
 @auth.route('/confirm/<token>')
 @login_required
 def confirm(token):
@@ -35,6 +36,7 @@ def confirm(token):
     else:
         flash("Invalidated confirm")
     return redirect(url_for('main.index'))
+
 
 @auth.route('/confirm')
 @login_required
@@ -47,6 +49,7 @@ def resend_confirmation():
     flash('a new conformation email send to your email')
     return redirect(url_for('main.index'))
 
+
 @auth.route('/unconfirmed')
 @login_required
 def unconfirmed():
@@ -54,6 +57,7 @@ def unconfirmed():
     if current_user.confirmed:
         return redirect(url_for('main.index'))
     return render_template('auth/unconfirmed.html')
+
 
 @auth.route('/login', methods=['GET', 'POST'])
 def login():
@@ -74,7 +78,8 @@ def logout():
     logout_user()
     return redirect(url_for('main.index'))
 
-@auth.route('change_password')
+
+@auth.route('/change_password', methods=['GET', 'POST'])
 @login_required
 def change_password():
     form = ChangePasswordForm()
@@ -83,6 +88,42 @@ def change_password():
         db.session.add(current_user)
         db.session.commit()
         flash('your password change successful.')
-        return redirect('main.index')
+        return redirect(url_for('main.index'))
     return render_template('auth/change_password.html', form=form)
 
+
+@auth.route('/reset_password_request', methods=['GET', 'POST'])
+def reset_password_request():
+    if not current_user.is_anonymous():
+        return redirect(url_for('main.index'))
+    form = ResetPasswordRequestForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(email=form.email.data).first()
+        if not user:
+            return redirect(url_for('main.index'))
+        token = user.generate_reset_token()
+        send_email(form.email.data, 'reset password', 'email/reset_password',
+                   token=token, user=user)
+        flash('a reset email send to your email.')
+        return redirect(url_for('auth.login'))
+    return render_template('auth/reset_password_request.html', form=form)
+
+
+@auth.route('/reset_password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    if not current_user.is_anonymous():
+        return redirect(url_for('main.index'))
+    form = ResetPasswordForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(email=form.email.data).first()
+        if not user:
+            return redirect(url_for('main.index'))
+        if not user.reset(token):
+            flash('Invalidate token')
+            return redirect(url_for('main.index'))
+        user.password = form.new_password.data
+        db.session.add(user)
+        db.session.commit()
+        flash('password reset successful. You can login.')
+        return redirect(url_for('auth.login'))
+    return render_template('auth/reset_password.html', form=form)

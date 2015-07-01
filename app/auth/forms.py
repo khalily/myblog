@@ -33,13 +33,35 @@ class RegisterForm(Form):
         if User.query.filter_by(username=field.data).first():
             raise ValidationError("Username Already in use.")
 
+
 class ChangePasswordForm(Form):
-    old_password = PasswordField('old password', validators=[Required(), Length(1, 64)])
-    new_password = PasswordField('new password', validators=[Required(), Length(1, 64),
+    old_password = PasswordField('old password', validators=[Required(), Length(1, 16)])
+    new_password = PasswordField('new password', validators=[Required(), Length(1, 16),
                                  EqualTo('confirm_password', 'two password must consist')])
-    confirm_password = PasswordField('confirm password', validators=[Required(), Length(1, 64)])
+    confirm_password = PasswordField('confirm password', validators=[Required(), Length(1, 16)])
     submit = SubmitField('Change')
 
     def validate_old_password(self, field):
         if not current_user.verify_password(field.data):
             raise ValidationError('old password incorrect')
+
+
+class ResetPasswordRequestForm(Form):
+    email = StringField('email', validators=[Required(), Length(1, 64), Email()])
+    submit = SubmitField('submit')
+
+    def validate_email(self, field):
+        if not User.query.filter_by(email=field.data).first():
+            raise ValidationError('email incorrect')
+
+
+class ResetPasswordForm(Form):
+    email = StringField('email', validators=[Required(), Length(1, 64), Email()])
+    new_password = PasswordField('new_password', validators=[Required(), Length(1, 16),
+                                 EqualTo('confirm_password', 'two password must consist')])
+    confirm_password = PasswordField('confirm_password', validators=[Required(), Length(1, 16)])
+    submit = SubmitField('submit')
+
+    def validate_email(self, field):
+        if not User.query.filter_by(email=field.data).first():
+            raise ValidationError('email incorrect')
