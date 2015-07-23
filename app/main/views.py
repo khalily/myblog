@@ -5,8 +5,8 @@ from flask import render_template, redirect, url_for, request, abort, flash
 from flask.ext.login import current_user, login_required
 from . import main
 from .. import db
-from ..models import User, Role
-from forms import EditProfileForm, EditProfileAdminForm
+from ..models import User, Role, Permission, Post
+from forms import EditProfileForm, EditProfileAdminForm, PostForm
 from ..decorators import admin_required
 
 
@@ -20,17 +20,30 @@ def before_request():
             and request.endpoint[:5] != 'auth.':
             return redirect(url_for('auth.unconfirmed'))
 
-@main.route('/')
+@main.route('/', methods=['GET', 'POST'])
 def index():
-    test = "<h1>HAHA</h1>"
-    return render_template('index.html', test=test)
+    form = PostForm()
+    if current_user.can(Permission.WRITE_ARTICLES) and form.validate_on_submit():
+        post = Post(body=form.body.data, author=current_user._get_current_object())
+        db.session.add(post)
+        db.session.commit()
+        return redirect(url_for('.index'))
+
+    page = request.args.get('page', 1, type=int)
+    pagination = Post.query.order_by(Post.timestamp.desc()).paginate(
+        page=page, error_out=False, per_page=10
+    )
+    posts = pagination.items
+
+    return render_template('index.html', posts=posts, form=form, pagination=pagination)
 
 @main.route('/user/<username>')
 def user(username):
     user = User.query.filter_by(username=username).first()
     if user is None:
         abort(404)
-    return render_template('user/user_profile.html', user=user)
+    posts = user.posts.order_by(Post.timestamp.desc()).all()
+    return render_template('user/user_profile.html', user=user, posts=posts)
 
 @main.route('/user/edit_profile', methods=['GET', 'POST'])
 @login_required

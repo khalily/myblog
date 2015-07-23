@@ -2,11 +2,12 @@
 # encoding: utf-8
 
 from datetime import datetime
+import hashlib
 
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask.ext.login import UserMixin, AnonymousUserMixin
 from itsdangerous import TimedJSONWebSignatureSerializer as Serializer
-from flask import current_app
+from flask import current_app, request
 
 from . import db
 from . import login_manager
@@ -23,6 +24,8 @@ class User(UserMixin, db.Model):
 
     pending_email = db.Column(db.String(64), unique=True)
 
+    avatar_hash = db.Column(db.String(32))
+
     role_id = db.Column(db.Integer, db.ForeignKey('roles.id'))
 
     name = db.Column(db.String(64))
@@ -31,6 +34,8 @@ class User(UserMixin, db.Model):
     member_since = db.Column(db.DateTime(), default=datetime.utcnow)
     last_seen = db.Column(db.DateTime(), default=datetime.utcnow)
 
+    posts = db.relationship('Post', backref='author', lazy='dynamic')
+
     def __init__(self, **kwargs):
         super(User, self).__init__(**kwargs)
         if self.role is None:
@@ -38,6 +43,8 @@ class User(UserMixin, db.Model):
                 self.role = Role.query.filter_by(permissions=0xff).first()
             if self.role is None:
                 self.role = Role.query.filter_by(default=True).first()
+        if self.email is not None and self.avatar_hash is None:
+            self.avatar_hash = hashlib.md5(self.email.encode('utf-8')).hexdigest()
 
     def ping(self):
         self.last_seen = datetime.utcnow()
@@ -101,6 +108,7 @@ class User(UserMixin, db.Model):
         if data.get('change_email') != self.id:
             return False
         self.email = self.pending_email
+        self.avatar_hash = hashlib.md5(self.email.encode('utf-8')).hexdigest()
         db.session.add(self)
         db.session.commit()
         return True
@@ -111,6 +119,38 @@ class User(UserMixin, db.Model):
 
     def is_administrator(self):
         return self.can(Permission.ADMINISTER)
+
+    def gravatar(self, size=100, default='identicon', rating='pg'):
+        if request.is_secure:
+            url = 'http://secure.gravatar.com/avatar'
+        else:
+            url = 'http://www.gravatar.com/avatar'
+
+        hash = self.avatar_hash or hashlib.md5(
+            self.email.encode('utf-8')
+        ).hexdigest()
+        return '{url}/{hash}?s={size}&d={default}&r={rating}'.format(
+            url=url, hash=hash, size=size, default=default, rating=rating
+        )
+
+    @staticmethod
+    def generate_fake(count=100):
+        import forgery_py as forgery
+        from sqlalchemy.exc import IntegrityError
+
+        for i in range(count):
+            u = User(email=forgery.internet.email_address(), password=forgery.lorem_ipsum.word(),
+                     name=forgery.name.full_name(), username=forgery.internet.user_name(True),
+                     location=forgery.address.city(), confirmed=True,
+                     about_me=forgery.lorem_ipsum.sentence(),
+                     member_since=forgery.date.date(True, 0, 500))
+            db.session.add(u)
+            try:
+                db.session.commit()
+            except IntegrityError:
+                db.session.rollback()
+
+
 
 
 class AnonymousUser(AnonymousUserMixin):
@@ -165,6 +205,28 @@ class Permission:
     WRITE_ARTICLES = 0x4
     MODERATE_COMMENTS = 0x8
     ADMINISTER = 0x80
+
+
+class Post(db.Model):
+    __tablename__ = 'posts'
+    id = db.Column(db.Integer, primary_key=True)
+    body = db.Column(db.Text)
+    timestamp = db.Column(db.DateTime, index=True, default=datetime.utcnow)
+    author_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+
+    @staticmethod
+    def generate_fake(count=100):
+        import forgery_py as forgery
+        from random import randint
+
+        user_count = User.query.count()
+        for i in range(count):
+            u = User.query.offset(randint(0, user_count-1)).first()
+            post = Post(body=forgery.lorem_ipsum.sentences(randint(1, 3)),
+                        timestamp=forgery.date.date(True),
+                        author=u)
+            db.session.add(post)
+            db.session.commit()
 
 
 @login_manager.user_loader
