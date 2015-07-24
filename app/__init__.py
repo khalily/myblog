@@ -9,6 +9,7 @@ from flask.ext.login import LoginManager
 from flask.ext.mail import Mail
 from flask.ext.moment import Moment
 from flask.ext.migrate import Migrate
+from flask.ext.pagedown import PageDown
 
 from config import config
 
@@ -17,6 +18,7 @@ db = SQLAlchemy()
 mail = Mail()
 moment = Moment()
 migrate = Migrate()
+pagedown = PageDown()
 login_manager = LoginManager()
 login_manager.session_protection = 'strong'
 login_manager.login_view = 'auth.login'
@@ -31,6 +33,7 @@ def create_app(config_name):
     login_manager.init_app(app)
     mail.init_app(app)
     moment.init_app(app)
+    pagedown.init_app(app)
 
     migrate.init_app(app, db)
 
